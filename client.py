@@ -1,4 +1,3 @@
-# client.py
 import socket
 import threading
 import time
@@ -11,22 +10,25 @@ GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RED = "\033[91m"
 
+# Offer variables
 MAGIC_COOKIE = 0xabcddcba
 MESSAGE_TYPE = 0x2
 
+"""
+Listen for offer messages and return server information
+"""
 def listen_for_offer():
-    """Listen for offer messages and return server information."""
     client_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     client_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     client_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     client_sock.bind(("", 37020))
-    print(f"{CYAN}Listening for offer requests...{RESET}")
+    print(f"{YELLOW}Listening for offer requests...{RESET}")
     while True:
         data, addr = client_sock.recvfrom(1024)
         if len(data) == 9:  # offer message length
             magic_cookie, message_type, udp_port, tcp_port = struct.unpack('!LBHH', data[:9])
             if magic_cookie == MAGIC_COOKIE and message_type == MESSAGE_TYPE:
-                print(f"Received offer from {addr[0]}: UDP {udp_port}, TCP {tcp_port}")
+                print(f"{GREEN}Received offer from {addr[0]}: UDP {udp_port}, TCP {tcp_port}{RESET}")
                 return addr[0], udp_port, tcp_port
 
 def tcp_client(server_ip, server_port, file_size):
@@ -78,10 +80,15 @@ def udp_client(server_ip, server_port, file_size):
     print(f"{RED}UDP packet loss: {loss_percentage:.2f}%{RESET}")
     sock.close()
 
+"""
+The main client function
+First receives an offer, and then receives info from user
+(or maybe the opposite?)
+And then sends the data according to user request and shows network statistics
+"""
 def client():
     print(f"{CYAN}Client started!{RESET}")
     server_ip, server_udp_port, server_tcp_port = listen_for_offer()
-    print(f"server ip: {server_ip}, tcp port: {server_tcp_port}, udp port: {server_udp_port}")
     # file_size = int(input("Enter the file size in bytes: "))
     # tcp_connections = int(input("Enter the number of TCP connections: "))
     # udp_connections = int(input("Enter the number of UDP connections: "))
