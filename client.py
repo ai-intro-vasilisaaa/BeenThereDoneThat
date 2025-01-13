@@ -32,51 +32,95 @@ def listen_for_offer():
             if magic_cookie == MAGIC_COOKIE and offer_message_type == OFFER_MESSAGE_TYPE:
                 print(f"{GREEN}Received offer from {addr[0]}: UDP {udp_port}, TCP {tcp_port}{RESET}")
                 return addr[0], udp_port, tcp_port
+            else:
+                print(f"{RED}Invalid message received!{RESET}")
 
 def tcp_client(server_ip, server_port, file_size):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((server_ip, server_port))
 
     # Send request message
-    request_message = struct.pack('!LBQ', MAGIC_COOKIE, REQUEST_MESSAGE_TYPE, file_size)
+    file_size_encoded = str(file_size).encode() + b'\n'
+    request_message = struct.pack('!LBQ', MAGIC_COOKIE, REQUEST_MESSAGE_TYPE, file_size_encoded)
     sock.sendall(request_message)
 
     # Receive payload message
     start_time = time.time()
 
+    total_data = b""
+    while True:
+        header = sock.recv(20)  # 20 bytes for header
+        if not header:
+            break
+        magic_cookie, message_type, total_segment_count, current_segment_count = struct.unpack('!LBQQ', header)
+        if magic_cookie != MAGIC_COOKIE or message_type != PAYLOAD_MESSAGE_TYPE:
+            print(f"{RED}Invalid message received!{RESET}")
+            break
+        data = sock.recv(1024)  # Receive payload
+        if not data:  # If connection is closed, stop receiving
+            break
+        total_data += data
+        if current_segment_count == total_segment_count:
+            break
+        print(f"{GREEN}Received segment {current_segment_count}/{total_segment_count}{RESET}")
 
+    print(f"{GREEN}TCP transfer completed. Received {current_segment_count} segments.{RESET}")
 
     end_time = time.time()
-    sock.close()
 
-    print(f"{GREEN}TCP transfer completed in {end_time - start_time:.2f} seconds{RESET}")
+    # Calculate transfer metrics
+    total_time = end_time - start_time
+    total_size_bits = len(total_data) * 8  # Convert bytes to bits
+    speed = total_size_bits / total_time if total_time > 0 else 0
+
+    # Print results
+    print(f"{GREEN}TCP transfer finished, total time: {total_time:.2f} seconds, total speed: {speed:.2f} bits/second{RESET}")
+
+    sock.close()
 
 def udp_client(server_ip, server_port, file_size):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind((server_ip, server_port))
     sock.settimeout(1.0)  # Set timeout for detecting transfer end
 
-    print(f"{CYAN}Starting UDP transfer to {server_ip}:{server_port}{RESET}")
-    # Send initial message to server to start transfer
-    sock.sendto(str(file_size).encode(), (server_ip, server_port))
-
-    received_packets = 0
-    lost_packets = 0
-    total_packets = file_size // 1024
+    # Send request message
+    file_size_encoded = str(file_size).encode() + b'\n'
+    request_message = struct.pack('!LBQ', MAGIC_COOKIE, REQUEST_MESSAGE_TYPE, file_size_encoded)
+    sock.sendall(request_message)
 
     start_time = time.time()
+
     while True:
         try:
-            data, _ = sock.recvfrom(1024)
-            received_packets += 1
+            header = sock.recv(20)  # 20 bytes for header
+            if not header:
+                break
+            magic_cookie, message_type, total_segment_count, current_segment_count = struct.unpack('!LBQQ', header)
+            if magic_cookie != MAGIC_COOKIE or message_type != PAYLOAD_MESSAGE_TYPE:
+                print(f"{RED}Invalid message received!{RESET}")
+                break
+            data = sock.recv(1024)  # Receive payload
+            if not data:  # If connection is closed, stop receiving
+                break
+            total_data += data
+            if current_segment_count == total_segment_count:
+                break
+            print(f"{GREEN}Received segment {current_segment_count}/{total_segment_count}{RESET}")
         except socket.timeout:
-            break
+            i = current_segment_count + 1
+            print(f"{RED}Packet {i} was lost{RESET}")
 
     end_time = time.time()
-    lost_packets = total_packets - received_packets
-    loss_percentage = (lost_packets / total_packets) * 100
 
-    print(f"{GREEN}UDP transfer completed in {end_time - start_time:.2f} seconds{RESET}")
-    print(f"{RED}UDP packet loss: {loss_percentage:.2f}%{RESET}")
+    # Calculate transfer metrics
+    total_time = end_time - start_time
+    total_size_bits = len(total_data) * 8  # Convert bytes to bits
+    speed = total_size_bits / total_time if total_time > 0 else 0
+    success_rate = (current_segment_count / total_segment_count) * 100
+
+    # Print results
+    print(f"{GREEN}UDP transfer finished, total time: {total_time:.2f} seconds, total speed: {speed:.2f} bits/second, percentage of packets received successfully: {success_rate:.2f}{RESET}")
+
     sock.close()
 
 """
