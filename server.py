@@ -10,9 +10,11 @@ GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RED = "\033[91m"
 
-# Offer variables
+# Message variables
 MAGIC_COOKIE = 0xabcddcba
-MESSAGE_TYPE = 0x2
+OFFER_MESSAGE_TYPE = 0x2
+REQUEST_MESSAGE_TYPE = 0x3
+PAYLOAD_MESSAGE_TYPE = 0x4
 
 # Global shutdown signal
 shutdown_event = threading.Event()
@@ -30,7 +32,7 @@ def broadcast_offer(broadcast_sock, server_udp_port, server_tcp_port, broadcast_
         offer_message = struct.pack(
             '!LBHH',
             MAGIC_COOKIE,
-            MESSAGE_TYPE,
+            OFFER_MESSAGE_TYPE,
             server_udp_port,
             server_tcp_port
         )
@@ -55,13 +57,25 @@ Still need to refine
 """
 def handle_tcp_client(conn, addr, file_size):
     print(f"{CYAN}TCP connection established with {addr}{RESET}")
-    data = str(file_size).encode() + b'\n'
-    conn.sendall(data)  # Send the file size followed by a line break
+    try:
+        # Receive request message
+        request_message = conn.recv(13)
+        magic_cookie, message_type, file_size = struct.unpack('!LBQ', request_message)
+        if magic_cookie != MAGIC_COOKIE or message_type != REQUEST_MESSAGE_TYPE:
+            print(f"{RED}Invalid request from {addr}{RESET}")
+            return
 
-    # Simulate sending the requested amount of bytes
-    conn.sendall(b'A' * file_size)
-    print(f"{GREEN}TCP: Sent {file_size} bytes to {addr}{RESET}")
-    conn.close()
+        # Send payload
+        total_segments = file_size // 1024
+        if file_size % 1024 != 0:
+            total_segments += 1
+        for segment in range(total_segments):
+            header = struct.pack('!LBQQ', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE, total_segments, segment + 1)
+            payload = b'A' * 1024
+            conn.sendall(header + payload)
+        print(f"{GREEN}Sent {total_segments} segments to {addr}{RESET}")
+    finally:
+        conn.close()
 
 """
 Like the tcp listen, but udp doesn't have connections
