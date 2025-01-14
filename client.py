@@ -181,13 +181,9 @@ Returns:
 def validate_file_size_input():
 
     file_size_message = '''
-    Enter the file size. Available formats:
-        - "1TB" or "1 TB" 
-        - "1GB" or "1 GB"
-        - "2300MB" or "2300 MB"
-        - "1024KB" or "1024 KB"
-        - "123456B" or "123456"'''
-    units = {"B": 1, "KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3, "TB": 1024 ** 4}
+    Enter the file size. 
+    Available formats: B/KB/MB/GB\n'''
+    units = {"B": 1, "KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3}
     
     input_file_size = input(file_size_message)
     # Check if the string ends with any of the units
@@ -215,8 +211,6 @@ def client_main():
     file_size = validate_file_size_input()
     tcp_connections = validate_conn_input("Enter the number of TCP connections: ")
     udp_connections = validate_conn_input("Enter the number of UDP connections: ")
-     
-
 
     server_ip, server_udp_port, server_tcp_port = listen_for_offer()
 
