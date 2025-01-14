@@ -101,6 +101,28 @@ def udp_listen(udp_server_sock):
 """
 also need to refine
 """
+def handle_udp_client(conn, addr, file_size):
+    print(f"{CYAN}UDP connection established with {addr}{RESET}")
+
+    # Receive request message
+    header = conn.recv(5)
+    magic_cookie, message_type = struct.unpack('!LB', header)
+    if magic_cookie != MAGIC_COOKIE or message_type != REQUEST_MESSAGE_TYPE:
+        print(f"{RED}Invalid request from {addr}{RESET}")
+        return
+    file_size_encoded = b""
+    while True:
+        byte = conn.recv(1)
+        if not byte or byte == b"\n":  # Stop at newline
+            break
+        file_size_encoded += byte
+    # Convert the file size string to an integer
+    try:
+        file_size = int(file_size_encoded.decode())
+        print(f"file size: {file_size}")
+    except ValueError:
+        print(f"{RED}Invalid file size: {file_size_encoded}{RESET}")
+
 def handle_udp_client(sock, client_addr, file_size):
     print(f"{CYAN}UDP connection established with {client_addr}{RESET}")
     
@@ -113,6 +135,12 @@ def handle_udp_client(sock, client_addr, file_size):
 
     num_packets = file_size // 1024  # Each packet is 1024 bytes
     sent_packets = 0
+
+    for i in range(num_packets):
+        packet = f"{i}".encode() + b' ' + b'A' * 1020
+        conn.sendto(packet, addr)
+        sent_packets += 1
+        time.sleep(0.01)  # Simulate packet interval
     try: 
         for i in range(num_packets):
             header = struct.pack('!LB', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE, num_packets, i)
@@ -122,6 +150,8 @@ def handle_udp_client(sock, client_addr, file_size):
             time.sleep(0.01)  # Simulate packet interval
     except Exception as e:
         print(f"{RED}Error sending packet {i}: {e}{RESET}")
+
+    print(f"{GREEN}UDP: Sent {sent_packets} packets to {addr}{RESET}")
 
     print(f"{GREEN}UDP: Sent {sent_packets} packets to {client_addr}{RESET}")
     sock.close()
