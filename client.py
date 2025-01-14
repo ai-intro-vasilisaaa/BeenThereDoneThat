@@ -15,7 +15,9 @@ MAGIC_COOKIE = 0xabcddcba
 OFFER_MESSAGE_TYPE = 0x2
 REQUEST_MESSAGE_TYPE = 0x3
 PAYLOAD_MESSAGE_TYPE = 0x4
-
+PACKET_SIZE = 1024
+HEADER_SIZE = 21
+PAYLOAD_SIZE = PACKET_SIZE - HEADER_SIZE
 """
 Listen for broadcast offer messages from servers and return server information
 
@@ -32,7 +34,7 @@ def listen_for_offer():
     client_sock.bind(("", 37020))  # Bind to listen for broadcasts on port 37020
     print(f"{YELLOW}Listening for offer requests...{RESET}")
     while True:
-        data, addr = client_sock.recvfrom(1024)
+        data, addr = client_sock.recvfrom(PACKET_SIZE)
         if len(data) == 9:   # Expected length of offer message
             magic_cookie, offer_message_type, udp_port, tcp_port = struct.unpack('!LBHH', data[:9]) # decode data
             if magic_cookie == MAGIC_COOKIE and offer_message_type == OFFER_MESSAGE_TYPE:
@@ -72,7 +74,7 @@ def tcp_client(server_ip, server_port, file_size):
             break
         magic_cookie, message_type = struct.unpack('!LB', header)
         if magic_cookie != MAGIC_COOKIE or message_type != PAYLOAD_MESSAGE_TYPE:
-            print(f"{RED}Invalid message received!{RESET}")
+            print(f"{RED}Invalid message received! {magic_cookie} and {PAYLOAD_MESSAGE_TYPE}{RESET}")
             break
         data = sock.recv(int(file_size))  # Receive payload
         if not data:  # If connection is closed, stop receiving
@@ -105,45 +107,39 @@ def tcp_client(server_ip, server_port, file_size):
 def udp_client(server_ip, server_port, file_size):
     
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    # sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("", 0))
-    # sock.bind((server_ip, server_port))
     sock.settimeout(1.0)  # Set timeout for detecting transfer end
 
     # Send request message
-<<<<<<< HEAD
-    # file_size_encoded = f"{file_size}".encode()
-    request_message = struct.pack('!LBQ', MAGIC_COOKIE, REQUEST_MESSAGE_TYPE, int(file_size))
-    sock.sendto(request_message, (server_ip, server_port))
-=======
-    file_size_encoded = f"{file_size}\n".encode()
-    header = struct.pack('!LB', MAGIC_COOKIE, REQUEST_MESSAGE_TYPE)
-    sock.sendto(header + file_size_encoded, (server_ip, server_port))
->>>>>>> 592e597186ddf71dd5450055a4c3c5e12092b79c
+    header = struct.pack('!LBQ', MAGIC_COOKIE, REQUEST_MESSAGE_TYPE, int(file_size))
+    sock.sendto(header, (server_ip, server_port))
 
     start_time = time.time()
     total_data = b""
     current_segment_count = 0
     total_segment_count = 0
+    lost_packets = 0
     while True:
         try:
-            header = sock.recv(21)  # 20 bytes for header
-            if not header:
+            payload_message = sock.recv(PACKET_SIZE)  
+            if not payload_message:
                 break
+            header = payload_message[:HEADER_SIZE]  # receive 21 bytes header
+            payload = payload_message[HEADER_SIZE:]  # receive payload
             magic_cookie, message_type, total_segment_count, current_segment_count = struct.unpack('!LBQQ', header)
             if magic_cookie != MAGIC_COOKIE or message_type != PAYLOAD_MESSAGE_TYPE:
                 print(f"{RED}Invalid message received!{RESET}")
                 break
-            data = sock.recv(1024)  # Receive payload
-            if not data:  # If connection is closed, stop receiving
-                break
-            total_data += data
+            total_data += payload
             if current_segment_count == total_segment_count:
                 break
-            print(f"{GREEN}Received segment {current_segment_count}/{total_segment_count}{RESET}")
-        except socket.timeout:
-            i = current_segment_count + 1
-            print(f"{RED}Packet {i} was lost{RESET}")
+        except socket.timeout: 
+            lost_packets += 1
+            current_segment_count += 1
+            print(f"{RED}Packet {current_segment_count} was lost{RESET}")
+            if current_segment_count == total_segment_count:
+                break
 
     end_time = time.time()
 
@@ -151,7 +147,7 @@ def udp_client(server_ip, server_port, file_size):
     total_time = end_time - start_time
     total_size_bits = len(total_data) * 8  # Convert bytes to bits
     speed = total_size_bits / total_time if total_time > 0 else 0
-    success_rate = (current_segment_count / total_segment_count) * 100
+    success_rate = (total_segment_count - lost_packets) / total_segment_count * 100
 
     # Print results
     print(f"{GREEN}UDP transfer finished, total time: {total_time:.2f} seconds, total speed: {speed:.2f} bits/second, percentage of packets received successfully: {success_rate:.2f}{RESET}")
@@ -221,7 +217,7 @@ And then sends the requests to the server, and receives payload data according t
 """
 def client_main():
     print(f"{CYAN}Client started!{RESET}")
-    file_size = input("Enter the file size: ")
+    file_size = validate_file_size_input()
     tcp_connections = validate_conn_input("Enter the number of TCP connections: ")
     udp_connections = validate_conn_input("Enter the number of UDP connections: ")
 
