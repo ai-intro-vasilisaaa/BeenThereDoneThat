@@ -67,14 +67,13 @@ def tcp_client(server_ip, server_port, file_size):
     start_time = time.time()
 
     while True:
-        header = sock.recv(5)  # recieve 5 bytes  header
+        header = sock.recv(5)  # receive 5 bytes header
         if not header:
             break
         magic_cookie, message_type = struct.unpack('!LB', header)
         if magic_cookie != MAGIC_COOKIE or message_type != PAYLOAD_MESSAGE_TYPE:
             print(f"{RED}Invalid message received!{RESET}")
             break
-        
         data = sock.recv(int(file_size))  # Receive payload
         if not data:  # If connection is closed, stop receiving
             break
@@ -112,10 +111,9 @@ def udp_client(server_ip, server_port, file_size):
     sock.settimeout(1.0)  # Set timeout for detecting transfer end
 
     # Send request message
-    file_size_encoded = str(file_size).encode() + b'\n'
-    request_message = struct.pack('!LBQ', MAGIC_COOKIE, REQUEST_MESSAGE_TYPE, int(file_size_encoded))
-    sock.sendto(request_message, (server_ip, server_port))
-
+    file_size_encoded = f"{file_size}\n".encode()
+    header = struct.pack('!LB', MAGIC_COOKIE, REQUEST_MESSAGE_TYPE)
+    sock.sendto(header + file_size_encoded, (server_ip, server_port))
 
     start_time = time.time()
     total_data = b""
