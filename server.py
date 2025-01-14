@@ -93,7 +93,8 @@ def udp_listen(udp_server_sock):
     try:
         while not shutdown_event.is_set():
             data, addr = udp_server_sock.recvfrom(1024)
-            threading.Thread(target=handle_udp_client, args=(data, addr, 1024 * 1024)).start()
+            print(struct.unpack('!LBHH', data[:9]))
+            threading.Thread(target=handle_udp_client, args=(udp_server_sock, addr, 1024 * 1024,)).start()
     except OSError:
         print(f"{RED}UDP thread stopped.{RESET}")
 
@@ -102,17 +103,28 @@ also need to refine
 """
 def handle_udp_client(sock, client_addr, file_size):
     print(f"{CYAN}UDP connection established with {client_addr}{RESET}")
+    
+    # Receive request message
+    header = sock.recv(5)
+    magic_cookie, message_type, file_size = struct.unpack('!LBQ', header)
+    if magic_cookie != MAGIC_COOKIE or message_type != REQUEST_MESSAGE_TYPE:
+        print(f"{RED}Invalid request from {client_addr}{RESET}")
+        return
+
     num_packets = file_size // 1024  # Each packet is 1024 bytes
     sent_packets = 0
-
-    for i in range(num_packets):
-        packet = f"{i}".encode() + b' ' + b'A' * 1020
-        sock.sendto(packet, client_addr)
-        sent_packets += 1
-        time.sleep(0.01)  # Simulate packet interval
+    try: 
+        for i in range(num_packets):
+            header = struct.pack('!LB', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE, num_packets, i)
+            packet = f"{i}".encode() + b' ' + b'A' * 1020
+            sock.sendto(packet, client_addr)
+            sent_packets += 1
+            time.sleep(0.01)  # Simulate packet interval
+    except Exception as e:
+        print(f"{RED}Error sending packet {i}: {e}{RESET}")
 
     print(f"{GREEN}UDP: Sent {sent_packets} packets to {client_addr}{RESET}")
-
+    sock.close()
 """
 The main server function
 You can change the UDP and TCP ports that will be used in the offer

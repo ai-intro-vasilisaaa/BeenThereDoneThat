@@ -112,16 +112,17 @@ def udp_client(server_ip, server_port, file_size):
     sock.settimeout(1.0)  # Set timeout for detecting transfer end
 
     # Send request message
-    file_size_encoded = str(file_size).encode() + b'\n'
-    request_message = struct.pack('!LBQ', MAGIC_COOKIE, REQUEST_MESSAGE_TYPE, int(file_size_encoded))
+    # file_size_encoded = f"{file_size}".encode()
+    request_message = struct.pack('!LBQ', MAGIC_COOKIE, REQUEST_MESSAGE_TYPE, int(file_size))
     sock.sendto(request_message, (server_ip, server_port))
-
 
     start_time = time.time()
     total_data = b""
+    current_segment_count = 0
+    total_segment_count = 0
     while True:
         try:
-            header = sock.recv(20)  # 20 bytes for header
+            header = sock.recv(21)  # 20 bytes for header
             if not header:
                 break
             magic_cookie, message_type, total_segment_count, current_segment_count = struct.unpack('!LBQQ', header)
