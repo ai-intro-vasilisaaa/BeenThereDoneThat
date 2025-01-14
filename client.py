@@ -119,39 +119,36 @@ def udp_client(server_ip, server_port, file_size):
     total_data = b""
     current_segment_count = 0
     total_segment_count = 0
-    lost_packets = 0
     while True:
         try:
-            payload_message = sock.recv(PACKET_SIZE)  
+            payload_message = sock.recv(1024)  
             if not payload_message:
                 break
             header = payload_message[:HEADER_SIZE]  # receive 21 bytes header
             payload = payload_message[HEADER_SIZE:]  # receive payload
-            magic_cookie, message_type, total_segment_count, current_segment_count = struct.unpack('!LBQQ', header)
+            magic_cookie, message_type,total_segment_count, current_segment_count = struct.unpack('!LBQQ', header)
             if magic_cookie != MAGIC_COOKIE or message_type != PAYLOAD_MESSAGE_TYPE:
                 print(f"{RED}Invalid message received!{RESET}")
                 break
             total_data += payload
             if current_segment_count == total_segment_count:
                 break
-        except socket.timeout: 
-            lost_packets += 1
-            current_segment_count += 1
-            print(f"{RED}Packet {current_segment_count} was lost{RESET}")
-            if current_segment_count == total_segment_count:
+        except socket.timeout: # if no data is received for 1 second, transfer is done, all packets sent or no                current_segment_count += 1
                 break
-
     end_time = time.time()
 
+    # Handle edge cases for no data received
+    if total_segment_count == 0:
+        print("No data received. Transfer failed.")
+        return
     # Calculate transfer metrics
     total_time = end_time - start_time
     total_size_bits = len(total_data) * 8  # Convert bytes to bits
     speed = total_size_bits / total_time if total_time > 0 else 0
-    success_rate = (total_segment_count - lost_packets) / total_segment_count * 100
+    success_rate = (current_segment_count + 1) / (total_segment_count+1) * 100
 
     # Print results
     print(f"{GREEN}UDP transfer finished, total time: {total_time:.2f} seconds, total speed: {speed:.2f} bits/second, percentage of packets received successfully: {success_rate:.2f}{RESET}")
-
     sock.close()
 
 

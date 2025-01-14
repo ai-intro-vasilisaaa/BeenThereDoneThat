@@ -113,7 +113,7 @@ def handle_udp_client(sock, client_addr, request_msg):
     
     
     # Calculate the number of packets
-    num_packets = file_size // PAYLOAD_SIZE  # Each packet is 1024 bytes
+    num_packets = (file_size + PAYLOAD_SIZE - 1) // PAYLOAD_SIZE  # Ceiling division  # Each packet is 1024 bytes
     sent_packets = 0
 
     print("num_packets: ", num_packets)
@@ -127,16 +127,16 @@ def handle_udp_client(sock, client_addr, request_msg):
             end = min(start + PAYLOAD_SIZE, file_size)
             payload = b'A' * (end - start)  # Simulated payload data
             
-            packet = header + payload  # Combine header and payload
+            packet = header + payload # Combine header and payload
 
             # Send packet
+            # print(f"{GREEN}Sending packet {i} to {client_addr}{RESET}, packet size: {len(packet)}, packet: {packet}, start, end, ")
             sock.sendto(packet, client_addr)
             sent_packets += 1
             
             time.sleep(0.01)  # Simulate packet interval between sends
         except Exception as e:
             print(f"{RED}Error sending packet {i}: {e}{RESET}")
-    sock.close()
 
 
 """
