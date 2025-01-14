@@ -31,13 +31,13 @@ def listen_for_offer():
     client_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     client_sock.bind(("", 37020))  # Bind to listen for broadcasts on port 37020
     print(f"{YELLOW}Listening for offer requests...{RESET}")
-    ## asked for no while - am thinking of a way to make it so that it listens for a certain amount of time instead of forever
     while True:
         data, addr = client_sock.recvfrom(1024)
         if len(data) == 9:   # Expected length of offer message
             magic_cookie, offer_message_type, udp_port, tcp_port = struct.unpack('!LBHH', data[:9]) # decode data
             if magic_cookie == MAGIC_COOKIE and offer_message_type == OFFER_MESSAGE_TYPE:
                 print(f"{GREEN}Received offer from {addr[0]}: UDP {udp_port}, TCP {tcp_port}{RESET}")
+                client_sock.close()
                 return addr[0], udp_port, tcp_port
             else:
                 print(f"{RED}Invalid message received from {addr}!{RESET}")
@@ -59,45 +59,41 @@ def tcp_client(server_ip, server_port, file_size):
     sock.connect((server_ip, server_port))
 
     # Send request message
-    file_size_encoded = str(file_size).encode() + b'\n'
-    request_message = struct.pack('!LBQ', MAGIC_COOKIE, REQUEST_MESSAGE_TYPE, file_size_encoded)
-    sock.sendall(request_message)
+    file_size_encoded = f"{file_size}\n".encode()
+    header = struct.pack('!LB', MAGIC_COOKIE, REQUEST_MESSAGE_TYPE)
+    sock.sendall(header + file_size_encoded)
 
     # Receive payload message
     start_time = time.time()
 
-    total_data = b""
     while True:
-        header = sock.recv(20)  # recieve 20 bytes  header
+        header = sock.recv(5)  # recieve 5 bytes  header
         if not header:
             break
-        magic_cookie, message_type, total_segment_count, current_segment_count = struct.unpack('!LBQQ', header)
+        magic_cookie, message_type = struct.unpack('!LB', header)
         if magic_cookie != MAGIC_COOKIE or message_type != PAYLOAD_MESSAGE_TYPE:
             print(f"{RED}Invalid message received!{RESET}")
             break
         
-        data = sock.recv(1024)  # Receive payload
+        data = sock.recv(int(file_size))  # Receive payload
         if not data:  # If connection is closed, stop receiving
             break
-        total_data += data
-        if current_segment_count == total_segment_count:
-            break
-        print(f"{GREEN}Received segment {current_segment_count}/{total_segment_count}{RESET}")
+        bytes_received = len(data)
+        print(f"{GREEN}Received {bytes_received}{RESET}")
 
-    print(f"{GREEN}TCP transfer completed. Received {current_segment_count} segments.{RESET}")
+    print(f"{GREEN}TCP transfer completed. Received {bytes_received} bytes.{RESET}")
 
     end_time = time.time()
 
     # Calculate transfer metrics
     total_time = end_time - start_time
-    total_size_bits = len(total_data) * 8  # Convert bytes to bits
+    total_size_bits = bytes_received * 8  # Convert bytes to bits
     speed = total_size_bits / total_time if total_time > 0 else 0
 
     # Print results
     print(f"{GREEN}TCP transfer finished, total time: {total_time:.2f} seconds, total speed: {speed:.2f} bits/second{RESET}")
 
     sock.close()
-
 
 """
     Handles UDP file transfer from the server.

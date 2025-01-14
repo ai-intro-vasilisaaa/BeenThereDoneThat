@@ -2,6 +2,7 @@ import socket
 import threading
 import time
 import struct
+import os
 
 # ANSI color codes
 RESET = "\033[0m"
@@ -48,32 +49,40 @@ def tcp_listen(tcp_server_sock):
     try:
         while not shutdown_event.is_set():
             conn, addr = tcp_server_sock.accept()
-            threading.Thread(target=handle_tcp_client, args=(conn, addr, 1024 * 1024)).start()
+            threading.Thread(target=handle_tcp_client, args=(conn, addr,)).start()
     except OSError:
         print(f"{RED}TCP thread stopped.{RESET}")
 
 """
 Still need to refine
 """
-def handle_tcp_client(conn, addr, file_size):
+def handle_tcp_client(conn, addr):
     print(f"{CYAN}TCP connection established with {addr}{RESET}")
     try:
         # Receive request message
-        request_message = conn.recv(13)
-        magic_cookie, message_type, file_size = struct.unpack('!LBQ', request_message)
+        header = conn.recv(5)
+        magic_cookie, message_type = struct.unpack('!LB', header)
         if magic_cookie != MAGIC_COOKIE or message_type != REQUEST_MESSAGE_TYPE:
             print(f"{RED}Invalid request from {addr}{RESET}")
             return
-
+        file_size_encoded = b""
+        while True:
+            byte = conn.recv(1)
+            if not byte or byte == b"\n":  # Stop at newline
+                break
+            file_size_encoded += byte
+        # Convert the file size string to an integer
+        try:
+            file_size = int(file_size_encoded.decode())
+            print(f"file size: {file_size}")
+        except ValueError:
+            print(f"{RED}Invalid file size: {file_size_encoded}{RESET}")
+        
         # Send payload
-        total_segments = file_size // 1024
-        if file_size % 1024 != 0:
-            total_segments += 1
-        for segment in range(total_segments):
-            header = struct.pack('!LBQQ', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE, total_segments, segment + 1)
-            payload = b'A' * 1024
-            conn.sendall(header + payload)
-        print(f"{GREEN}Sent {total_segments} segments to {addr}{RESET}")
+        header = struct.pack('!LB', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE)
+        payload = os.urandom(file_size)
+        conn.sendall(header + payload)
+        print(f"{GREEN}Sent {file_size} bytes to {addr}{RESET}")
     finally:
         conn.close()
 
@@ -122,14 +131,14 @@ def server(udp_port=12345, tcp_port=12346):
     
     # Start the UDP listen thread
     udp_server_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udp_server_sock.bind(("localhost", udp_port))
+    udp_server_sock.bind((host_ip, udp_port))
     udp_thread = threading.Thread(target=udp_listen, args=(udp_server_sock,))
     udp_thread.start()
     print(f"{GREEN}Server listening on UDP port {udp_port}{RESET}")
 
     # Start the TCP listen thread
     tcp_server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcp_server_sock.bind(("localhost", tcp_port))
+    tcp_server_sock.bind((host_ip, tcp_port))
     tcp_server_sock.listen(20)
     tcp_thread = threading.Thread(target=tcp_listen, args=(tcp_server_sock,))
     tcp_thread.start()
@@ -140,7 +149,7 @@ def server(udp_port=12345, tcp_port=12346):
         while True:
             time.sleep(0.1)
     except KeyboardInterrupt:
-        print(f"{RED}\nServer shutting down...{RESET}")
+        print(f"{YELLOW}Server shutting down...{RESET}")
         shutdown_event.set()  # Signal threads to stop
     finally:
         print(f"{YELLOW}Cleaning up resources...{RESET}")
