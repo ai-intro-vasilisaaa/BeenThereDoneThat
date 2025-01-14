@@ -110,16 +110,19 @@ def tcp_client(server_ip, server_port, file_size):
 def udp_client(server_ip, server_port, file_size):
     
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind((server_ip, server_port))
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("", 0))
+    # sock.bind((server_ip, server_port))
     sock.settimeout(1.0)  # Set timeout for detecting transfer end
 
     # Send request message
     file_size_encoded = str(file_size).encode() + b'\n'
-    request_message = struct.pack('!LBQ', MAGIC_COOKIE, REQUEST_MESSAGE_TYPE, file_size_encoded)
-    sock.sendall(request_message)
+    request_message = struct.pack('!LBQ', MAGIC_COOKIE, REQUEST_MESSAGE_TYPE, int(file_size_encoded))
+    sock.sendto(request_message, (server_ip, server_port))
+
 
     start_time = time.time()
-
+    total_data = b""
     while True:
         try:
             header = sock.recv(20)  # 20 bytes for header
@@ -154,6 +157,7 @@ def udp_client(server_ip, server_port, file_size):
     sock.close()
 
 
+
 """
 Validates and converts a user-provided connection number into Int.
 
@@ -178,26 +182,32 @@ Args:
 Returns:
     int: File size in bytes, number of tcp connections, number of udp connections.
 """
-# def validate_file_size_input():
+def validate_file_size_input():
 
-    # file_size_message = '''
-    # Enter the file size. 
-    # Available formats: B/KB/MB/GB\n'''
-    # units = {"B": 1, "KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3}
+    file_size_message = '''Enter the file size. Available formats:
+        - "1TB" or "1 TB" 
+        - "1GB" or "1 GB"
+        - "2300MB" or "2300 MB"
+        - "1024KB" or "1024 KB"
+        - "123456B" or "123456"\n'''
+    units = {"KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3, "TB": 1024 ** 4, "B": 1}
     
-#     input_file_size = input(file_size_message)
-#     input_file_size = input_file_size.strip().upper()
-#     # Check if the string ends with any of the units
-#     while True:
-#         for unit, multiplier in units.items():
-#             if input_file_size.endswith(unit):
-#                 try:
-#                     number = int(input_file_size[:-len(unit)])
-#                     return number * multiplier
-#                 except ValueError:
-#                     print(f"Invalid size: {input_file_size}")
-#         print(f"Invalid unit. Please enter a valid unit.")
-#         input_file_size = input("Enter file size: ").strip().upper()
+    input_file_size = input(file_size_message)
+    input_file_size = input_file_size.strip().upper().replace(" ", "")
+    # Check if the string ends with any of the units
+    while True:
+        for unit, multiplier in units.items():
+            if input_file_size.endswith(unit):
+                try:
+                    number = int(input_file_size[:-len(unit)])
+                    return number * multiplier
+                except ValueError:
+                    print(f"Invalid size or unit: {input_file_size}")
+                    break
+        # Otherwise assume Bytes
+        if input_file_size.isnumeric():
+            return int(input_file_size)
+        input_file_size = input("Enter file size: ").strip().upper()
 
 
 
