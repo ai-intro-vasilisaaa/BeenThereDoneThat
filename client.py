@@ -180,10 +180,10 @@ Returns:
 """
 # def validate_file_size_input():
 
-    file_size_message = '''
-    Enter the file size. 
-    Available formats: B/KB/MB/GB\n'''
-    units = {"B": 1, "KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3}
+    # file_size_message = '''
+    # Enter the file size. 
+    # Available formats: B/KB/MB/GB\n'''
+    # units = {"B": 1, "KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3}
     
 #     input_file_size = input(file_size_message)
 #     input_file_size = input_file_size.strip().upper()
