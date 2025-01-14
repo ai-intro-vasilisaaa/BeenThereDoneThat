@@ -178,25 +178,26 @@ Args:
 Returns:
     int: File size in bytes, number of tcp connections, number of udp connections.
 """
-def validate_file_size_input():
+# def validate_file_size_input():
 
     file_size_message = '''
     Enter the file size. 
     Available formats: B/KB/MB/GB\n'''
     units = {"B": 1, "KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3}
     
-    input_file_size = input(file_size_message)
-    # Check if the string ends with any of the units
-    while True:
-        for unit, multiplier in units.items():
-            if input_file_size.endswith(unit):
-                try:
-                    number = int(input_file_size[:-len(unit)])
-                    return number * multiplier
-                except ValueError:
-                    print(f"Invalid size: {input_file_size}")
-        print(f"Invalid unit. Please enter a valid unit.")
-        input_file_size = input(file_size_message)
+#     input_file_size = input(file_size_message)
+#     input_file_size = input_file_size.strip().upper()
+#     # Check if the string ends with any of the units
+#     while True:
+#         for unit, multiplier in units.items():
+#             if input_file_size.endswith(unit):
+#                 try:
+#                     number = int(input_file_size[:-len(unit)])
+#                     return number * multiplier
+#                 except ValueError:
+#                     print(f"Invalid size: {input_file_size}")
+#         print(f"Invalid unit. Please enter a valid unit.")
+#         input_file_size = input("Enter file size: ").strip().upper()
 
 
 
@@ -208,7 +209,7 @@ And then sends the requests to the server, and receives payload data according t
 """
 def client_main():
     print(f"{CYAN}Client started!{RESET}")
-    file_size = validate_file_size_input()
+    file_size = input("Enter the file size: ")
     tcp_connections = validate_conn_input("Enter the number of TCP connections: ")
     udp_connections = validate_conn_input("Enter the number of UDP connections: ")
 
