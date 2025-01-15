@@ -52,6 +52,7 @@ Params:
     server_ip (str): The server's IP address.
     server_port (int): The server's TCP port.
     file_size (int): The size of the file to be requested in bytes.
+    thread_num (int): The sequence number of the thread.
 Returns:
     None
     """
@@ -108,6 +109,7 @@ def tcp_client(server_ip, server_port, file_size, thread_num):
         server_ip (str): The server's IP address.
         server_port (int): The server's UDP port.
         file_size (int): The size of the file to be requested in bytes.
+        thread_num (int): The sequence number of the thread.
 """
 def udp_client(server_ip, server_port, file_size, thread_num):
     
