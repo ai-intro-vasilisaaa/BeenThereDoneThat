@@ -10,6 +10,7 @@ CYAN = "\033[96m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RED = "\033[91m"
+MAGENTA = '\033[35m'
 
 # Message variables
 MAGIC_COOKIE = 0xabcddcba
@@ -26,7 +27,6 @@ shutdown_event = threading.Event()
 """
 The Broadcast offer function
 Sends offer messages according to the format using broadcast in port 37020 that's decided ahead 
-(maybe not what we're supposed to do im not sure)
 Will stop when the shutdown event is triggered
 """
 def broadcast_offer(broadcast_sock, server_udp_port, server_tcp_port, broadcast_interval=1):
@@ -57,35 +57,40 @@ def tcp_listen(tcp_server_sock):
         print(f"{RED}TCP thread stopped.{RESET}")
 
 """
-Still need to refine
+Receives from client request message with file_size
+Sends a payload message with a file of size file_size bytes
 """
 def handle_tcp_client(conn, addr):
     print(f"{CYAN}TCP connection established with {addr}{RESET}")
-    # Receive request message
-    header = conn.recv(5)
-    magic_cookie, message_type = struct.unpack('!LB', header)
-    if magic_cookie != MAGIC_COOKIE or message_type != REQUEST_MESSAGE_TYPE:
-        print(f"{RED}Invalid request from {addr}{RESET}")
-        return
-    file_size_encoded = b""
-    while True:
-        byte = conn.recv(1)
-        if not byte or byte == b"\n":  # Stop at newline
-            break
-        file_size_encoded += byte
-    # Convert the file size string to an integer
     try:
-        file_size = int(file_size_encoded.decode())
-        # Send payload
-        header = struct.pack('!LB', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE)
-        payload = os.urandom(file_size)
-        conn.sendall(header + payload)
-        print(f"{GREEN}Sent {file_size} bytes to {addr}{RESET}")
-    except ValueError:
-        print(f"{RED}Invalid file size: {file_size_encoded}{RESET}")
+        # Receive request message
+        header = conn.recv(5)
+        magic_cookie, message_type = struct.unpack('!LB', header)
+        if magic_cookie != MAGIC_COOKIE or message_type != REQUEST_MESSAGE_TYPE:
+            print(f"{RED}Invalid request from {addr}{RESET}")
+            return
+        file_size_encoded = b""
+        while True:
+            byte = conn.recv(1)
+            if not byte or byte == b"\n":  # Stop at newline
+                break
+            file_size_encoded += byte
+        # Convert the file size string to an integer
+        try:
+            file_size = int(file_size_encoded.decode())
+            # Send payload
+            header = struct.pack('!LB', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE)
+            payload = os.urandom(file_size)
+            conn.sendall(header + payload)
+            print(f"{GREEN}Sent {file_size} bytes to {addr}{RESET}")
+        except ValueError:
+            print(f"{RED}Invalid file size: {file_size_encoded}{RESET}")
+    finally:
+        conn.close()
 
 """
-Like the tcp listen, but udp doesn't have connections
+Just listen to incoming connections on the socket and runs
+the udp handle thread for each connection
 """
 def udp_listen(udp_server_sock):
     try:
@@ -95,7 +100,9 @@ def udp_listen(udp_server_sock):
     except OSError as e:
         print(f"{RED}UDP thread stopped.{e}.{RESET}")
 
-
+"""
+sherannn
+"""
 def handle_udp_client(sock, client_addr, request_msg):
     print(f"{CYAN}UDP connection established with {client_addr}{RESET}")
     
@@ -120,9 +127,32 @@ def handle_udp_client(sock, client_addr, request_msg):
         end = min(start + PAYLOAD_SIZE, file_size)
         packets.append(header + payload_base[start:end])
 
+    # Split the sending into chunks handled by multiple threads
+    thread_list = []
+    chunk_size = (num_packets + num_threads - 1) // num_threads  # Divide packets into chunks
+    sent_packets = 0
     s = time.time()
+    for t in range(num_threads):
+        start_idx = t * chunk_size
+        end_idx = min(start_idx + chunk_size, num_packets)
+        thread = threading.Thread(target=handle_udp_client, args=(sock,client_addr,start_idx, end_idx))
+        thread_list.append(thread)
+        thread.start()
 
-    for i in range(num_packets):
+    e = time.time()
+    print(f"{GREEN}Sent {sent_packets} packets to {client_addr} in {e-s} seconds{RESET}")
+        # Wait for all threads to complete
+    for thread in thread_list:
+        thread.join()
+    e = time.time()
+    print(f"{GREEN}Overall from start to finish Sent {sent_packets} packets to {client_addr} in {e-s} seconds{RESET}")
+
+
+"""
+ # Function for each thread to send a portion of packets
+"""
+def handle_udp_thread(udp_server_sock, client_addr, packets, start_idx, end_idx):
+    for idx in range(start_idx, end_idx):
         try:
             sock.sendto(packets[i], client_addr)
             time.sleep(0.01)
@@ -139,7 +169,7 @@ When doing CTRL+C will go into shutdown mode using the shutdown event
 """
 def server(udp_port=12345, tcp_port=12346):
     host_ip = socket.gethostbyname(socket.gethostname())
-    print(f"{CYAN}Server started, listening on IP address {host_ip}{RESET}")
+    print(f"{MAGENTA}Server started, listening on IP address {host_ip}{RESET}")
     
     # Start the offer broadcast thread
     broadcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -177,7 +207,7 @@ def server(udp_port=12345, tcp_port=12346):
         broadcast_thread.join()
         udp_thread.join()
         tcp_thread.join()
-        print(f"{GREEN}Server stopped gracefully.{RESET}")
+        print(f"{MAGENTA}Server closing down, thank you for using Mr.Worldwide services <3{RESET}")
 
 if __name__ == "__main__":
     server()
