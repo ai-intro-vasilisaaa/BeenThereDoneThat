@@ -16,6 +16,9 @@ MAGIC_COOKIE = 0xabcddcba
 OFFER_MESSAGE_TYPE = 0x2
 REQUEST_MESSAGE_TYPE = 0x3
 PAYLOAD_MESSAGE_TYPE = 0x4
+PACKET_SIZE = 1024
+HEADER_SIZE = 21
+PAYLOAD_SIZE = PACKET_SIZE - HEADER_SIZE
 
 # Global shutdown signal
 shutdown_event = threading.Event()
@@ -91,45 +94,48 @@ def udp_listen(udp_server_sock):
     try:
         while not shutdown_event.is_set():
             data, addr = udp_server_sock.recvfrom(1024)
-            threading.Thread(target=handle_udp_client, args=(data, addr, 1024 * 1024)).start()
-    except OSError:
-        print(f"{RED}UDP thread stopped.{RESET}")
+            threading.Thread(target=handle_udp_client, args=(udp_server_sock, addr, data,)).start()
+    except OSError as e:
+        print(f"{RED}UDP thread stopped.{e}.{RESET}")
 
-"""
-also need to refine
-"""
-def handle_udp_client(conn, addr, file_size):
-    print(f"{CYAN}UDP connection established with {addr}{RESET}")
 
+def handle_udp_client(sock, client_addr, request_msg):
+    print(f"{CYAN}UDP connection established with {client_addr}{RESET}")
+    
     # Receive request message
-    header = conn.recv(5)
-    magic_cookie, message_type = struct.unpack('!LB', header)
+    magic_cookie, message_type, file_size = struct.unpack('!LBQ', request_msg[:13])
     if magic_cookie != MAGIC_COOKIE or message_type != REQUEST_MESSAGE_TYPE:
-        print(f"{RED}Invalid request from {addr}{RESET}")
+        print(f"{RED}Invalid request from {client_addr}{RESET}")
         return
-    file_size_encoded = b""
-    while True:
-        byte = conn.recv(1)
-        if not byte or byte == b"\n":  # Stop at newline
-            break
-        file_size_encoded += byte
-    # Convert the file size string to an integer
-    try:
-        file_size = int(file_size_encoded.decode())
-        print(f"file size: {file_size}")
-    except ValueError:
-        print(f"{RED}Invalid file size: {file_size_encoded}{RESET}")
-
-    num_packets = file_size // 1024  # Each packet is 1024 bytes
+    print("Request validated. Preparing to send file...")
+    
+    
+    # Calculate the number of packets
+    num_packets = (file_size + PAYLOAD_SIZE - 1) // PAYLOAD_SIZE  # Ceiling division  # Each packet is 1024 bytes
     sent_packets = 0
 
+    print("num_packets: ", num_packets)
+    
     for i in range(num_packets):
-        packet = f"{i}".encode() + b' ' + b'A' * 1020
-        conn.sendto(packet, addr)
-        sent_packets += 1
-        time.sleep(0.01)  # Simulate packet interval
+        try:
+            header = struct.pack('!LBQQ', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE, num_packets, i)
+            
+            # Build payload
+            start = i * PAYLOAD_SIZE
+            end = min(start + PAYLOAD_SIZE, file_size)
+            payload = b'A' * (end - start)  # Simulated payload data
+            
+            packet = header + payload # Combine header and payload
 
-    print(f"{GREEN}UDP: Sent {sent_packets} packets to {addr}{RESET}")
+            # Send packet
+            # print(f"{GREEN}Sending packet {i} to {client_addr}{RESET}, packet size: {len(packet)}, packet: {packet}, start, end, ")
+            sock.sendto(packet, client_addr)
+            sent_packets += 1
+            
+            time.sleep(0.01)  # Simulate packet interval between sends
+        except Exception as e:
+            print(f"{RED}Error sending packet {i}: {e}{RESET}")
+
 
 """
 The main server function
