@@ -72,11 +72,14 @@ def tcp_client(server_ip, server_port, file_size):
             break
         magic_cookie, message_type = struct.unpack('!LB', header)
         if magic_cookie != MAGIC_COOKIE or message_type != PAYLOAD_MESSAGE_TYPE:
-            print(f"{RED}Invalid message received!{RESET}")
-            break
+            print(f"{RED}Invalid message received!\nmagic cookie - {magic_cookie}\nmessage type - {message_type}{RESET}")
+            sock.close()
+            return
         data = sock.recv(int(file_size))  # Receive payload
         if not data:  # If connection is closed, stop receiving
-            break
+            print(f"{RED}Connection closed by server{RESET}")
+            sock.close()
+            return
         bytes_received = len(data)
         print(f"{GREEN}Received {bytes_received}{RESET}")
 
@@ -90,7 +93,7 @@ def tcp_client(server_ip, server_port, file_size):
     speed = total_size_bits / total_time if total_time > 0 else 0
 
     # Print results
-    print(f"{GREEN}TCP transfer finished, total time: {total_time:.2f} seconds, total speed: {speed:.2f} bits/second{RESET}")
+    print(f"{GREEN}TCP transfer finished, total time: {total_time:.2f} seconds, total speed: {speed:.2f} bits/second, {bytes_received}{RESET}")
 
     sock.close()
 

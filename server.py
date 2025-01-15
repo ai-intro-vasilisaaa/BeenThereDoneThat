@@ -74,15 +74,13 @@ def handle_tcp_client(conn, addr):
         # Convert the file size string to an integer
         try:
             file_size = int(file_size_encoded.decode())
-            print(f"file size: {file_size}")
+            # Send payload
+            header = struct.pack('!LB', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE)
+            payload = os.urandom(file_size)
+            conn.sendall(header + payload)
+            print(f"{GREEN}Sent {file_size} bytes to {addr}{RESET}")
         except ValueError:
             print(f"{RED}Invalid file size: {file_size_encoded}{RESET}")
-        
-        # Send payload
-        header = struct.pack('!LB', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE)
-        payload = os.urandom(file_size)
-        conn.sendall(header + payload)
-        print(f"{GREEN}Sent {file_size} bytes to {addr}{RESET}")
     finally:
         conn.close()
 
