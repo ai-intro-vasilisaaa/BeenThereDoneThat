@@ -138,9 +138,10 @@ def udp_client(server_ip, server_port, file_size, thread_num):
                 break
             total_data += payload
             if current_segment_count == total_segment_count:
+                print("All packets received")
                 break
-            print(f"{GREEN}Received {len(payload)} bytes{RESET}")
-        except socket.timeout: # if no data is received for 1 second, transfer is done, all packets sent or no                current_segment_count += 1
+            print(f"segment {current_segment_count} out of {total_segment_count}, {len(payload)} out of {len(total_data)}, needed is {file_size}")
+        except socket.timeout: # if no data is received for 1 second, transfer is done, all packets sent or no
                 break
     end_time = time.time()
 
@@ -238,8 +239,6 @@ def client_main():
     for thread in threading.enumerate():
         if thread != threading.current_thread():
             thread.join()
-    server_tcp_port.stop()
-    server_udp_port.stop()
     print(f"{CYAN}Client finished!{RESET}")
     
 if __name__ == "__main__":

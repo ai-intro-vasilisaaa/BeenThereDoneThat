@@ -61,31 +61,28 @@ Still need to refine
 """
 def handle_tcp_client(conn, addr):
     print(f"{CYAN}TCP connection established with {addr}{RESET}")
+    # Receive request message
+    header = conn.recv(5)
+    magic_cookie, message_type = struct.unpack('!LB', header)
+    if magic_cookie != MAGIC_COOKIE or message_type != REQUEST_MESSAGE_TYPE:
+        print(f"{RED}Invalid request from {addr}{RESET}")
+        return
+    file_size_encoded = b""
+    while True:
+        byte = conn.recv(1)
+        if not byte or byte == b"\n":  # Stop at newline
+            break
+        file_size_encoded += byte
+    # Convert the file size string to an integer
     try:
-        # Receive request message
-        header = conn.recv(5)
-        magic_cookie, message_type = struct.unpack('!LB', header)
-        if magic_cookie != MAGIC_COOKIE or message_type != REQUEST_MESSAGE_TYPE:
-            print(f"{RED}Invalid request from {addr}{RESET}")
-            return
-        file_size_encoded = b""
-        while True:
-            byte = conn.recv(1)
-            if not byte or byte == b"\n":  # Stop at newline
-                break
-            file_size_encoded += byte
-        # Convert the file size string to an integer
-        try:
-            file_size = int(file_size_encoded.decode())
-            # Send payload
-            header = struct.pack('!LB', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE)
-            payload = os.urandom(file_size)
-            conn.sendall(header + payload)
-            print(f"{GREEN}Sent {file_size} bytes to {addr}{RESET}")
-        except ValueError:
-            print(f"{RED}Invalid file size: {file_size_encoded}{RESET}")
-    finally:
-        conn.close()
+        file_size = int(file_size_encoded.decode())
+        # Send payload
+        header = struct.pack('!LB', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE)
+        payload = os.urandom(file_size)
+        conn.sendall(header + payload)
+        print(f"{GREEN}Sent {file_size} bytes to {addr}{RESET}")
+    except ValueError:
+        print(f"{RED}Invalid file size: {file_size_encoded}{RESET}")
 
 """
 Like the tcp listen, but udp doesn't have connections
@@ -94,29 +91,27 @@ def udp_listen(udp_server_sock):
     try:
         while not shutdown_event.is_set():
             data, addr = udp_server_sock.recvfrom(1024)
-            threading.Thread(target=handle_udp_client, args=(udp_server_sock, addr, data,)).start()
+            threading.Thread(target=handle_udp_client, args=(udp_server_sock, addr, data)).start()
     except OSError as e:
         print(f"{RED}UDP thread stopped.{e}.{RESET}")
 
 
-def handle_udp_client(sock, client_addr, request_msg, num_threads=6):
+def handle_udp_client(sock, client_addr, request_msg):
     print(f"{CYAN}UDP connection established with {client_addr}{RESET}")
     
     # Receive request message
+    print(struct.unpack('!LBQ', request_msg[:13]))
     magic_cookie, message_type, file_size = struct.unpack('!LBQ', request_msg[:13])
     if magic_cookie != MAGIC_COOKIE or message_type != REQUEST_MESSAGE_TYPE:
         print(f"{RED}Invalid request from {client_addr}{RESET}")
         return
     print("Request validated. Preparing to send file...")
     
-    
     # Calculate the number of packets
-    num_packets = file_size // PAYLOAD_SIZE if file_size > PAYLOAD_SIZE else 1 # Each packet is x bytes
+    num_packets = ( file_size + PAYLOAD_SIZE -1 ) // PAYLOAD_SIZE +1   # Each packet is x bytes
 
     payload_base = os.urandom(file_size)  # Precompute the entire payload
     packets = []
-
-    sent_packets = 0
 
     # Precompute headers
     for i in range(num_packets):
@@ -125,37 +120,16 @@ def handle_udp_client(sock, client_addr, request_msg, num_threads=6):
         end = min(start + PAYLOAD_SIZE, file_size)
         packets.append(header + payload_base[start:end])
 
-    # Split the sending into chunks handled by multiple threads
-    thread_list = []
-    chunk_size = (num_packets + num_threads - 1) // num_threads  # Divide packets into chunks
-    sent_packets = 0
     s = time.time()
-    for t in range(num_threads):
-        start_idx = t * chunk_size
-        end_idx = min(start_idx + chunk_size, num_packets)
-        thread = threading.Thread(target=handle_udp_client, args=(sock,client_addr,start_idx, end_idx))
-        thread_list.append(thread)
-        thread.start()
 
-    e = time.time()
-    print(f"{GREEN}Sent {sent_packets} packets to {client_addr} in {e-s} seconds{RESET}")
-        # Wait for all threads to complete
-    for thread in thread_list:
-        thread.join()
-    e = time.time()
-    print(f"{GREEN}Overall from start to finish Sent {sent_packets} packets to {client_addr} in {e-s} seconds{RESET}")
-
-
-"""
- # Function for each thread to send a portion of packets
-"""
-def handle_udp_thread(udp_server_sock, client_addr, packets, start_idx, end_idx):
-    for idx in range(start_idx, end_idx):
+    for i in range(num_packets):
         try:
-            udp_server_sock.sendto(packets[idx], client_addr)
-            sent_packets += 1
+            sock.sendto(packets[i], client_addr)
+            time.sleep(0.01)
         except Exception as e:
-            print(f"{RED}Error sending packet {idx}: {e}{RESET}")
+            print(f"{RED}Error sending packet {i}: {e}{RESET}")
+    e = time.time()
+    print(f"{GREEN}Overall from start to finish Sent {num_packets} packets to {client_addr} in {e-s} seconds{RESET}")
 
 """
 The main server function
