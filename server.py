@@ -97,6 +97,8 @@ def udp_listen(udp_server_sock):
     try:
         while not shutdown_event.is_set():
             data, addr = udp_server_sock.recvfrom(13)
+            if data is None:
+                break
             threading.Thread(target=handle_udp_client, args=(udp_server_sock, addr, data)).start()
     except OSError as e:
         print(f"{RED}UDP thread stopped.{e}.{RESET}")
@@ -154,7 +156,6 @@ def server(udp_port=12345, tcp_port=12346):
     # Start the UDP listen thread
     udp_server_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_server_sock.bind((host_ip, udp_port))
-    
     udp_thread = threading.Thread(target=udp_listen, args=(udp_server_sock,))
     udp_thread.start()
     print(f"{GREEN}Server listening on UDP port {udp_port}{RESET}")
