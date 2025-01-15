@@ -123,7 +123,6 @@ def udp_client(server_ip, server_port, file_size, thread_num):
     header = struct.pack('!LBQ', MAGIC_COOKIE, REQUEST_MESSAGE_TYPE, int(file_size))
     sock.sendto(header, (server_ip, server_port))
 
-    start_time = time.time()
     total_data = b""
     current_segment_count = 0
     total_segment_count = 0
@@ -143,7 +142,7 @@ def udp_client(server_ip, server_port, file_size, thread_num):
             if current_segment_count == total_segment_count:
                 print("All packets received")
                 break
-            print(f"segment {current_segment_count} out of {total_segment_count}, {len(payload)} out of {len(total_data)}, needed is {file_size}")
+            # print(f"segment {current_segment_count} out of {total_segment_count}")
         except socket.timeout: # if no data is received for 1 second, transfer is done, all packets sent or no
                 break
     end_time = time.time()

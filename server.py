@@ -97,14 +97,16 @@ def udp_listen(udp_server_sock):
     try:
         while not shutdown_event.is_set():
             data, addr = udp_server_sock.recvfrom(13)
-            threading.Thread(target=handle_udp_client, args=(udp_server_sock, addr, data,)).start()
+            threading.Thread(target=handle_udp_client, args=(udp_server_sock, addr, data)).start()
     except OSError as e:
         print(f"{RED}UDP thread stopped.{e}.{RESET}")
+        
 
 """
-sherannn
+Receives from client request message with file_size
+Sends segmented payloads message with a number of puckets, current number, and a payload
 """
-def handle_udp_client(sock, client_addr, request_msg, num_threads=6):
+def handle_udp_client(sock, client_addr, request_msg):
     print(f"{CYAN}UDP connection established with {client_addr}{RESET}")
     
     # Receive request message
@@ -114,49 +116,24 @@ def handle_udp_client(sock, client_addr, request_msg, num_threads=6):
         return
     print("Request validated. Preparing to send file...")
     
-    
     # Calculate the number of packets
-    num_packets = file_size // PAYLOAD_SIZE if file_size > PAYLOAD_SIZE else 1 # Each packet is x bytes
+    num_packets = (file_size + PAYLOAD_SIZE - 1) // PAYLOAD_SIZE  # Ceiling division  # Each packet is 1024 bytes
 
     payload_base = os.urandom(file_size)  # Precompute the entire payload
     packets = []
-
-    # Precompute headers
-    for i in range(num_packets):
-        header = struct.pack('!LBQQ', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE, num_packets, i)
-        start = i * PAYLOAD_SIZE
-        end = min(start + PAYLOAD_SIZE, file_size)
-        packets.append(header + payload_base[start:end])
-
-    # Split the sending into chunks handled by multiple threads
-    thread_list = []
-    chunk_size = (num_packets + num_threads - 1) // num_threads  # Divide packets into chunks
+    
     s = time.time()
-    for t in range(num_threads):
-        start_idx = t * chunk_size
-        end_idx = min(start_idx + chunk_size, num_packets)
-        thread = threading.Thread(target=handle_udp_client, args=(sock,client_addr,start_idx, end_idx))
-        thread_list.append(thread)
-        thread.start()
+    try:    
+        for i in range(num_packets):
+            header = struct.pack('!LBQQ', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE, num_packets, i)
+            start = i * PAYLOAD_SIZE
+            end = min(start + PAYLOAD_SIZE, file_size)
+            sock.sendto(header + payload_base[start:end], client_addr)
+    except Exception as e:
+        print(f"{RED}Error sending packet {i}: {e}{RESET}")
 
     e = time.time()
-    print(f"{GREEN}Sent {num_packets} packets to {client_addr} in {e-s} seconds{RESET}")
-        # Wait for all threads to complete
-    for thread in thread_list:
-        thread.join()
-    e = time.time()
-    print(f"{GREEN}Overall from start to finish Sent {num_packets} packets to {client_addr} in {e-s} seconds{RESET}")
-
-"""
- # Function for each thread to send a portion of packets
-"""
-def handle_udp_thread(udp_server_sock, client_addr, packets, start_idx, end_idx):
-    for idx in range(start_idx, end_idx):
-        try:
-            udp_server_sock.sendto(packets[idx], client_addr)
-            sent_packets += 1
-        except Exception as e:
-            print(f"{RED}Error sending packet {idx}: {e}{RESET}")
+    print(f"{GREEN} from start to finish Sent {num_packets} packets to {client_addr} in {e-s} seconds{RESET}")
 
 """
 The main server function
@@ -177,6 +154,7 @@ def server(udp_port=12345, tcp_port=12346):
     # Start the UDP listen thread
     udp_server_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_server_sock.bind((host_ip, udp_port))
+    
     udp_thread = threading.Thread(target=udp_listen, args=(udp_server_sock,))
     udp_thread.start()
     print(f"{GREEN}Server listening on UDP port {udp_port}{RESET}")
