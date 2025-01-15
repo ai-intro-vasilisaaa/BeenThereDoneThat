@@ -105,7 +105,6 @@ def tcp_client(server_ip, server_port, file_size, thread_num):
 
     # Print results
     print(f"{GREEN}Thread {thread_num} - TCP transfer finished!{RESET}\nTotal time: {total_time:.2f} seconds\nTotal speed: {speed:.2f} bits/second")
-    sock.shutdown(socket.SHUT_WR)
     sock.close()
 
 """
@@ -165,6 +164,7 @@ def udp_client(server_ip, server_port, file_size, thread_num):
 
     # Print results
     print(f"{GREEN}Thread {thread_num} - UDP transfer finished!{RESET}\nTotal time: {total_time:.2f} seconds\nTotal speed: {speed:.2f} bits/second\nPercentage of packets received successfully: {success_rate:.2f}")
+    sock.shutdown(socket.SHUT_WR)
     sock.close()
 
 
