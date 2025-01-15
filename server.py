@@ -10,6 +10,7 @@ CYAN = "\033[96m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RED = "\033[91m"
+MAGENTA = '\033[35m'
 
 # Message variables
 MAGIC_COOKIE = 0xabcddcba
@@ -26,7 +27,6 @@ shutdown_event = threading.Event()
 """
 The Broadcast offer function
 Sends offer messages according to the format using broadcast in port 37020 that's decided ahead 
-(maybe not what we're supposed to do im not sure)
 Will stop when the shutdown event is triggered
 """
 def broadcast_offer(broadcast_sock, server_udp_port, server_tcp_port, broadcast_interval=1):
@@ -57,7 +57,8 @@ def tcp_listen(tcp_server_sock):
         print(f"{RED}TCP thread stopped.{RESET}")
 
 """
-Still need to refine
+Receives from client request message with file_size
+Sends a payload message with a file of size file_size bytes
 """
 def handle_tcp_client(conn, addr):
     print(f"{CYAN}TCP connection established with {addr}{RESET}")
@@ -68,6 +69,7 @@ def handle_tcp_client(conn, addr):
         if magic_cookie != MAGIC_COOKIE or message_type != REQUEST_MESSAGE_TYPE:
             print(f"{RED}Invalid request from {addr}{RESET}")
             return
+        # Rescue file size
         file_size_encoded = b""
         while True:
             byte = conn.recv(1)
@@ -79,7 +81,7 @@ def handle_tcp_client(conn, addr):
             file_size = int(file_size_encoded.decode())
             # Send payload
             header = struct.pack('!LB', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE)
-            payload = os.urandom(file_size)
+            payload = os.urandom(file_size) # generate file with size file_size
             conn.sendall(header + payload)
             print(f"{GREEN}Sent {file_size} bytes to {addr}{RESET}")
         except ValueError:
@@ -88,7 +90,8 @@ def handle_tcp_client(conn, addr):
         conn.close()
 
 """
-Like the tcp listen, but udp doesn't have connections
+Just listen to incoming connections on the socket and runs
+the udp handle thread for each connection
 """
 def udp_listen(udp_server_sock):
     try:
@@ -98,7 +101,9 @@ def udp_listen(udp_server_sock):
     except OSError as e:
         print(f"{RED}UDP thread stopped.{e}.{RESET}")
 
-
+"""
+sherannn
+"""
 def handle_udp_client(sock, client_addr, request_msg, num_threads=6):
     print(f"{CYAN}UDP connection established with {client_addr}{RESET}")
     
@@ -142,7 +147,6 @@ def handle_udp_client(sock, client_addr, request_msg, num_threads=6):
     e = time.time()
     print(f"{GREEN}Overall from start to finish Sent {num_packets} packets to {client_addr} in {e-s} seconds{RESET}")
 
-
 """
  # Function for each thread to send a portion of packets
 """
@@ -162,7 +166,7 @@ When doing CTRL+C will go into shutdown mode using the shutdown event
 """
 def server(udp_port=12345, tcp_port=12346):
     host_ip = socket.gethostbyname(socket.gethostname())
-    print(f"{CYAN}Server started, listening on IP address {host_ip}{RESET}")
+    print(f"{MAGENTA}Server started, listening on IP address {host_ip}{RESET}")
     
     # Start the offer broadcast thread
     broadcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -200,7 +204,7 @@ def server(udp_port=12345, tcp_port=12346):
         broadcast_thread.join()
         udp_thread.join()
         tcp_thread.join()
-        print(f"{GREEN}Server stopped gracefully.{RESET}")
+        print(f"{MAGENTA}Server closing down, thank you for using Mr.Worldwide services <3{RESET}")
 
 if __name__ == "__main__":
     server()
