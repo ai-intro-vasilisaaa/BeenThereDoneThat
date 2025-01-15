@@ -99,7 +99,7 @@ def udp_listen(udp_server_sock):
         print(f"{RED}UDP thread stopped.{e}.{RESET}")
 
 
-def handle_udp_client(sock, client_addr, request_msg):
+def handle_udp_client(sock, client_addr, request_msg, num_threads=6):
     print(f"{CYAN}UDP connection established with {client_addr}{RESET}")
     
     # Receive request message
@@ -111,31 +111,51 @@ def handle_udp_client(sock, client_addr, request_msg):
     
     
     # Calculate the number of packets
-    num_packets = (file_size + PAYLOAD_SIZE - 1) // PAYLOAD_SIZE  # Ceiling division  # Each packet is 1024 bytes
+    num_packets = file_size // PAYLOAD_SIZE if file_size > PAYLOAD_SIZE else 1 # Each packet is x bytes
+
+    payload_base = os.urandom(file_size)  # Precompute the entire payload
+    packets = []
+
     sent_packets = 0
 
-    print("num_packets: ", num_packets)
-    
+    # Precompute headers
     for i in range(num_packets):
+        header = struct.pack('!LBQQ', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE, num_packets, i)
+        start = i * PAYLOAD_SIZE
+        end = min(start + PAYLOAD_SIZE, file_size)
+        packets.append(header + payload_base[start:end])
+
+    # Split the sending into chunks handled by multiple threads
+    thread_list = []
+    chunk_size = (num_packets + num_threads - 1) // num_threads  # Divide packets into chunks
+    sent_packets = 0
+    s = time.time()
+    for t in range(num_threads):
+        start_idx = t * chunk_size
+        end_idx = min(start_idx + chunk_size, num_packets)
+        thread = threading.Thread(target=handle_udp_client, args=(sock,client_addr,start_idx, end_idx))
+        thread_list.append(thread)
+        thread.start()
+
+    e = time.time()
+    print(f"{GREEN}Sent {sent_packets} packets to {client_addr} in {e-s} seconds{RESET}")
+        # Wait for all threads to complete
+    for thread in thread_list:
+        thread.join()
+    e = time.time()
+    print(f"{GREEN}Overall from start to finish Sent {sent_packets} packets to {client_addr} in {e-s} seconds{RESET}")
+
+
+"""
+ # Function for each thread to send a portion of packets
+"""
+def handle_udp_thread(udp_server_sock, client_addr, packets, start_idx, end_idx):
+    for idx in range(start_idx, end_idx):
         try:
-            header = struct.pack('!LBQQ', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE, num_packets, i)
-            
-            # Build payload
-            start = i * PAYLOAD_SIZE
-            end = min(start + PAYLOAD_SIZE, file_size)
-            payload = b'A' * (end - start)  # Simulated payload data
-            
-            packet = header + payload # Combine header and payload
-
-            # Send packet
-            # print(f"{GREEN}Sending packet {i} to {client_addr}{RESET}, packet size: {len(packet)}, packet: {packet}, start, end, ")
-            sock.sendto(packet, client_addr)
+            udp_server_sock.sendto(packets[idx], client_addr)
             sent_packets += 1
-            
-            time.sleep(0.01)  # Simulate packet interval between sends
         except Exception as e:
-            print(f"{RED}Error sending packet {i}: {e}{RESET}")
-
+            print(f"{RED}Error sending packet {idx}: {e}{RESET}")
 
 """
 The main server function

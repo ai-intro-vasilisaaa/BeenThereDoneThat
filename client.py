@@ -71,7 +71,7 @@ def tcp_client(server_ip, server_port, file_size):
     while True:
         header = sock.recv(5)  # receive 5 bytes header
         if not header:
-            break
+            return # If connection is closed, stop receiving
         magic_cookie, message_type = struct.unpack('!LB', header)
         if magic_cookie != MAGIC_COOKIE or message_type != PAYLOAD_MESSAGE_TYPE:
             print(f"{RED}Invalid message received!\nmagic cookie - {magic_cookie}\nmessage type - {message_type}{RESET}")
@@ -122,6 +122,7 @@ def udp_client(server_ip, server_port, file_size):
     total_data = b""
     current_segment_count = 0
     total_segment_count = 0
+    start_time = time.time()
     while True:
         try:
             payload_message = sock.recv(1024)  
@@ -136,14 +137,16 @@ def udp_client(server_ip, server_port, file_size):
             total_data += payload
             if current_segment_count == total_segment_count:
                 break
+            print(f"{GREEN}Received {len(payload)} bytes{RESET}")
         except socket.timeout: # if no data is received for 1 second, transfer is done, all packets sent or no                current_segment_count += 1
                 break
     end_time = time.time()
 
     # Handle edge cases for no data received
-    if total_segment_count == 0:
-        print("No data received. Transfer failed.")
-        return
+    # if total_segment_count == 0:
+    #     print("No data received. Transfer failed.")
+    #     return
+
     # Calculate transfer metrics
     total_time = end_time - start_time
     total_size_bits = len(total_data) * 8  # Convert bytes to bits
@@ -153,7 +156,6 @@ def udp_client(server_ip, server_port, file_size):
     # Print results
     print(f"{GREEN}UDP transfer finished, total time: {total_time:.2f} seconds, total speed: {speed:.2f} bits/second, percentage of packets received successfully: {success_rate:.2f}{RESET}")
     sock.close()
-
 
 
 """
@@ -230,5 +232,13 @@ def client_main():
     for _ in range(udp_connections):
         threading.Thread(target=udp_client, args=(server_ip, server_udp_port, file_size)).start()
 
+
+    for thread in threading.enumerate():
+        if thread != threading.current_thread():
+            thread.join()
+    server_tcp_port.stop()
+    server_udp_port.stop()
+    print(f"{CYAN}Client finished!{RESET}")
+    
 if __name__ == "__main__":
     client_main()
