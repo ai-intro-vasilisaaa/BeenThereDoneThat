@@ -37,19 +37,22 @@ def listen_for_offer():
     print(f"{YELLOW}Listening for offer requests...{RESET}")
     try:
         while True:
-            data, addr = client_sock.recvfrom(PACKET_SIZE)
-            if len(data) == 9:   # Expected length of offer message
-                magic_cookie, offer_message_type, udp_port, tcp_port = struct.unpack('!LBHH', data[:9]) # decode data
-                if magic_cookie == MAGIC_COOKIE and offer_message_type == OFFER_MESSAGE_TYPE:
-                    print(f"{GREEN}Received offer from {addr[0]}: UDP {udp_port}, TCP {tcp_port}{RESET}")
-                    client_sock.close()
-                    return addr[0], udp_port, tcp_port
-                else:
-                    print(f"{RED}Invalid message received from {addr}!{RESET}")
+            try:
+                data, addr = client_sock.recvfrom(PACKET_SIZE)
+                if len(data) == 9:   # Expected length of offer message
+                    magic_cookie, offer_message_type, udp_port, tcp_port = struct.unpack('!LBHH', data[:9]) # decode data
+                    if magic_cookie == MAGIC_COOKIE and offer_message_type == OFFER_MESSAGE_TYPE:
+                        print(f"{GREEN}Received offer from {addr[0]}: UDP {udp_port}, TCP {tcp_port}{RESET}")
+                        client_sock.close()
+                        return addr[0], udp_port, tcp_port
+                    else:
+                        print(f"{RED}Invalid message received from {addr}!{RESET}")
+            except KeyboardInterrupt:
+                print(f"{MAGENTA}Client closing down, thank you for using Mr.Worldwide services <3{RESET}")
+                return
     except KeyboardInterrupt:
         print(f"{MAGENTA}Client closing down, thank you for using Mr.Worldwide services <3{RESET}")
-        client_sock.close()
-        exit()
+        return
 
 """
 Handles TCP file transfer from the server.
