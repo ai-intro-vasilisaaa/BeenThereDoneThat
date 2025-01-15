@@ -84,6 +84,7 @@ def handle_tcp_client(conn, addr):
             payload = os.urandom(file_size) # generate file with size file_size
             conn.sendall(header + payload)
             print(f"{GREEN}Sent {file_size} bytes to {addr}{RESET}")
+        # if attempting decoding fails
         except ValueError:
             print(f"{RED}Invalid file size: {file_size_encoded}{RESET}")
     finally:
@@ -95,12 +96,14 @@ the udp handle thread for each connection
 """
 def udp_listen(udp_server_sock):
     try:
+        # while we are not in shutdown mode
         while not shutdown_event.is_set():
             data, addr = udp_server_sock.recvfrom(13)
+            # if no data is received and there's no connection, break the loop
             if data is None:
                 break
             threading.Thread(target=handle_udp_client, args=(udp_server_sock, addr, data)).start()
-    except OSError:
+    except OSError: # if the socket is closed
         print(f"{RED}UDP thread stopped.{RESET}")
         
 
@@ -119,21 +122,23 @@ def handle_udp_client(sock, client_addr, request_msg):
     print("Request validated. Preparing to send file...")
     
     # Calculate the number of packets
-    num_packets = (file_size + PAYLOAD_SIZE - 1) // PAYLOAD_SIZE  # Ceiling division  # Each packet is 1024 bytes
+    num_packets = (file_size + PAYLOAD_SIZE - 1) // PAYLOAD_SIZE  # Each packet is 1024 bytes
 
     payload_base = os.urandom(file_size)  # Precompute the entire payload
-    packets = []
     
-    s = time.time()
+    s = time.time() # start calculating time
     try:    
-        for i in range(num_packets):
+        for i in range(num_packets): # Send each packet
+            # create the header
             header = struct.pack('!LBQQ', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE, num_packets, i)
+           
+            # calculate the start and end of the payload out of the whole file
             start = i * PAYLOAD_SIZE
             end = min(start + PAYLOAD_SIZE, file_size)
+            # send the packet
             sock.sendto(header + payload_base[start:end], client_addr)
     except Exception as e:
         print(f"{RED}Error sending packet {i}: {e}{RESET}")
-
     e = time.time()
     print(f"{GREEN} from start to finish Sent {num_packets} packets to {client_addr} in {e-s} seconds{RESET}")
 

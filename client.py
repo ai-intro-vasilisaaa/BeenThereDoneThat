@@ -136,28 +136,24 @@ def udp_client(server_ip, server_port, file_size, thread_num):
     start_time = time.time()
     while True:
         try:
-            payload_message = sock.recv(1024)  
+            payload_message = sock.recv(1024)   # receive 1024 bytes
             if not payload_message:
                 break
             header = payload_message[:HEADER_SIZE]  # receive 21 bytes header
             payload = payload_message[HEADER_SIZE:]  # receive payload
+            
+            # Decode header and check the relevant payload message is there
             magic_cookie, message_type,total_segment_count, current_segment_count = struct.unpack('!LBQQ', header)
             if magic_cookie != MAGIC_COOKIE or message_type != PAYLOAD_MESSAGE_TYPE:
                 print(f"{RED}Thread {thread_num} - Invalid message received!{RESET}")
                 break
-            total_data += payload
+            total_data += payload # add to total data
             if current_segment_count == total_segment_count:
                 print("All packets received")
                 break
-            # print(f"segment {current_segment_count} out of {total_segment_count}")
         except socket.timeout: # if no data is received for 1 second, transfer is done, all packets sent or no
                 break
     end_time = time.time()
-
-    # Handle edge cases for no data received
-    # if total_segment_count == 0:
-    #     print("No data received. Transfer failed.")
-    #     return
 
     # Calculate transfer metrics
     total_time = end_time - start_time
@@ -182,6 +178,7 @@ Returns:
 def validate_conn_input(message):
     try:
         connections = input(message)
+        # check if connections is a number only (positive or 0)
         while connections.isnumeric() == False:
             print(f"{RED}Invalid input. Please enter a positive Intager.{RESET}")
             connections = input(message)
@@ -209,21 +206,26 @@ def validate_file_size_input():
             - "123456B" or "123456"\n'''
         units = {"KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3, "TB": 1024 ** 4, "B": 1}
         
+        # take the input and remove spaces and make it uppercase
         input_file_size = input(file_size_message)
         input_file_size = input_file_size.strip().upper().replace(" ", "")
         # Check if the string ends with any of the units
         while True:
             for unit, multiplier in units.items():
-                if input_file_size.endswith(unit):
+                if input_file_size.endswith(unit): # if it does, try to turn it to a number=
                     try:
                         number = int(input_file_size[:-len(unit)])
-                        return number * multiplier
+                        return number * multiplier # return the number of bytes
                     except ValueError:
                         print(f"{RED}Invalid size or unit: {input_file_size}{RESET}")
                         break
             # Otherwise assume Bytes
             if input_file_size.isnumeric():
-                return int(input_file_size)
+                try:
+                    number = int(input_file_size)
+                    return number
+                except ValueError:
+                    print(f"{RED}Invalid size or unit: {input_file_size}{RESET}")
             input_file_size = input(f"{RED}Invalid number, enter file size: {RESET}").strip().upper()
     except KeyboardInterrupt:
         print(f"{MAGENTA}Client closing down, thank you for using Mr.Worldwide services <3{RESET}")
