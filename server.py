@@ -116,8 +116,6 @@ def handle_udp_client(sock, client_addr, request_msg, num_threads=6):
     payload_base = os.urandom(file_size)  # Precompute the entire payload
     packets = []
 
-    sent_packets = 0
-
     # Precompute headers
     for i in range(num_packets):
         header = struct.pack('!LBQQ', MAGIC_COOKIE, PAYLOAD_MESSAGE_TYPE, num_packets, i)
@@ -128,7 +126,6 @@ def handle_udp_client(sock, client_addr, request_msg, num_threads=6):
     # Split the sending into chunks handled by multiple threads
     thread_list = []
     chunk_size = (num_packets + num_threads - 1) // num_threads  # Divide packets into chunks
-    sent_packets = 0
     s = time.time()
     for t in range(num_threads):
         start_idx = t * chunk_size
@@ -138,12 +135,12 @@ def handle_udp_client(sock, client_addr, request_msg, num_threads=6):
         thread.start()
 
     e = time.time()
-    print(f"{GREEN}Sent {sent_packets} packets to {client_addr} in {e-s} seconds{RESET}")
+    print(f"{GREEN}Sent {num_packets} packets to {client_addr} in {e-s} seconds{RESET}")
         # Wait for all threads to complete
     for thread in thread_list:
         thread.join()
     e = time.time()
-    print(f"{GREEN}Overall from start to finish Sent {sent_packets} packets to {client_addr} in {e-s} seconds{RESET}")
+    print(f"{GREEN}Overall from start to finish Sent {num_packets} packets to {client_addr} in {e-s} seconds{RESET}")
 
 
 """
