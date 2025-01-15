@@ -100,8 +100,8 @@ def udp_listen(udp_server_sock):
             if data is None:
                 break
             threading.Thread(target=handle_udp_client, args=(udp_server_sock, addr, data)).start()
-    except OSError as e:
-        print(f"{RED}UDP thread stopped.{e}.{RESET}")
+    except OSError:
+        print(f"{RED}UDP thread stopped.{RESET}")
         
 
 """
