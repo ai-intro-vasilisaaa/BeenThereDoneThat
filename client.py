@@ -55,7 +55,7 @@ Params:
 Returns:
     None
     """
-def tcp_client(server_ip, server_port, file_size):
+def tcp_client(server_ip, server_port, file_size, thread_num):
     
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((server_ip, server_port))
@@ -70,12 +70,12 @@ def tcp_client(server_ip, server_port, file_size):
 
     header = sock.recv(5)  # receive 5 bytes header
     if not header:
-        print(f"{RED}Connection closed by server{RESET}")
+        print(f"{RED}Thread {thread_num} - Connection closed by server{RESET}")
         sock.close()
         return
     magic_cookie, message_type = struct.unpack('!LB', header)
     if magic_cookie != MAGIC_COOKIE or message_type != PAYLOAD_MESSAGE_TYPE:
-        print(f"{RED}Invalid message received!\nmagic cookie - {magic_cookie}\nmessage type - {message_type}{RESET}")
+        print(f"{RED}Thread {thread_num} - Invalid message received!{RESET}")
         sock.close()
         return
     # Start receiving stream until needed size reached
@@ -83,7 +83,7 @@ def tcp_client(server_ip, server_port, file_size):
     while len(data) < int(file_size):
         packet = sock.recv(int(file_size) - len(data))
         if not packet:  # If connection is closed, stop receiving
-            print(f"{RED}Connection closed by server{RESET}")
+            print(f"{RED}Thread {thread_num} - Connection closed by server{RESET}")
             sock.close()
             return
         data.extend(packet)
@@ -97,7 +97,7 @@ def tcp_client(server_ip, server_port, file_size):
     speed = total_size_bits / total_time if total_time > 0 else 0
 
     # Print results
-    print(f"{GREEN}TCP transfer finished{RESET}\ntotal time: {total_time:.2f} seconds\ntotal speed: {speed:.2f} bits/second")
+    print(f"{GREEN}Thread {thread_num} - TCP transfer finished!{RESET}\nTotal time: {total_time:.2f} seconds\nTotal speed: {speed:.2f} bits/second")
 
     sock.close()
 
@@ -109,7 +109,7 @@ def tcp_client(server_ip, server_port, file_size):
         server_port (int): The server's UDP port.
         file_size (int): The size of the file to be requested in bytes.
 """
-def udp_client(server_ip, server_port, file_size):
+def udp_client(server_ip, server_port, file_size, thread_num):
     
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -133,7 +133,7 @@ def udp_client(server_ip, server_port, file_size):
             payload = payload_message[HEADER_SIZE:]  # receive payload
             magic_cookie, message_type,total_segment_count, current_segment_count = struct.unpack('!LBQQ', header)
             if magic_cookie != MAGIC_COOKIE or message_type != PAYLOAD_MESSAGE_TYPE:
-                print(f"{RED}Invalid message received!{RESET}")
+                print(f"{RED}Thread {thread_num} - Invalid message received!{RESET}")
                 break
             total_data += payload
             if current_segment_count == total_segment_count:
@@ -144,7 +144,7 @@ def udp_client(server_ip, server_port, file_size):
 
     # Handle edge cases for no data received
     if total_segment_count == 0:
-        print("No data received. Transfer failed.")
+        print(f"{RED}Thread {thread_num} - No data received, transfer failed.{RESET}")
         return
     # Calculate transfer metrics
     total_time = end_time - start_time
@@ -153,7 +153,7 @@ def udp_client(server_ip, server_port, file_size):
     success_rate = (current_segment_count + 1) / (total_segment_count+1) * 100
 
     # Print results
-    print(f"{GREEN}UDP transfer finished, total time: {total_time:.2f} seconds, total speed: {speed:.2f} bits/second, percentage of packets received successfully: {success_rate:.2f}{RESET}")
+    print(f"{GREEN}Thread {thread_num} - UDP transfer finished!{RESET}\nTotal time: {total_time:.2f} seconds\nTotal speed: {speed:.2f} bits/second\nPercentage of packets received successfully: {success_rate:.2f}")
     sock.close()
 
 
@@ -169,7 +169,7 @@ Returns:
 def validate_conn_input(message):
     connections = input(message)
     while connections.isnumeric() == False:
-        print("Invalid input. Please enter a positive Intager.")
+        print(f"{RED}Invalid input. Please enter a positive Intager.{RESET}")
         connections = input(message)
     return int(connections)
 
@@ -202,7 +202,7 @@ def validate_file_size_input():
                     number = int(input_file_size[:-len(unit)])
                     return number * multiplier
                 except ValueError:
-                    print(f"Invalid size or unit: {input_file_size}")
+                    print(f"{RED}Invalid size or unit: {input_file_size}{RESET}")
                     break
         # Otherwise assume Bytes
         if input_file_size.isnumeric():
@@ -225,12 +225,12 @@ def client_main():
 
     server_ip, server_udp_port, server_tcp_port = listen_for_offer()
 
-    print(f"{CYAN}Starting TCP and UDP transfers...{RESET}")
-    for _ in range(tcp_connections):
-        threading.Thread(target=tcp_client, args=(server_ip, server_tcp_port, file_size)).start()
+    print(f"{YELLOW}Starting TCP and UDP transfers...{RESET}")
+    for thread_num in range(tcp_connections):
+        threading.Thread(target=tcp_client, args=(server_ip, server_tcp_port, file_size, thread_num)).start()
 
-    for _ in range(udp_connections):
-        threading.Thread(target=udp_client, args=(server_ip, server_udp_port, file_size)).start()
+    for thread_num in range(udp_connections):
+        threading.Thread(target=udp_client, args=(server_ip, server_udp_port, file_size, thread_num)).start()
 
 if __name__ == "__main__":
     client_main()
